@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/binary"
 	"fmt"
 	"os"
 )
@@ -32,6 +33,19 @@ func main() {
 		}
 
 		if string(peSignature) == "MZ\x90\x00" {
+			var peSize uint32
+			err = binary.Read(f, binary.LittleEndian, &peSize)
+			if err != nil {
+				fmt.Printf("Error reading PE size: %v\n", err)
+				break
+			}
+
+			if int64(peSize) > maxFileSize {
+				fmt.Printf("PE size is larger than %d MB, skipping\n", maxFileSize/MB)
+				offset += int64(peSize)
+				continue
+			}
+
 			outFile, err := os.Create(fmt.Sprintf("%08x.exe", offset))
 			if err != nil {
 				fmt.Printf("Error creating file: %v\n", err)
@@ -42,7 +56,7 @@ func main() {
 			var peData []byte
 			var bytesRead int
 			var totalBytesRead int64
-			for totalBytesRead < maxFileSize {
+			for totalBytesRead < int64(peSize) {
 				data := make([]byte, MB)
 				bytesRead, err = f.ReadAt(data, totalBytesRead)
 				if err != nil || bytesRead == 0 {
@@ -52,17 +66,15 @@ func main() {
 				peData = append(peData, data[:bytesRead]...)
 			}
 
-			if totalBytesRead >= maxFileSize {
-				fmt.Printf("Extracted file is larger than %d MB, skipping\n", maxFileSize/MB)
-				continue
-			}
-
 			_, err = outFile.Write(peData)
 			if err != nil {
 				fmt.Printf("Error writing PE data: %v\n", err)
 				break
 			}
+
+			offset += int64(peSize)
+		} else {
+			offset++
 		}
-		offset++
 	}
 }
