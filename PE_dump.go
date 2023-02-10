@@ -3,6 +3,10 @@ package main
 import (
 	"fmt"
 	"os"
+	"syscall"
+	"unsafe"
+
+	"github.com/Velocidex/go-pe"
 )
 
 const MB = 1024 * 1024
@@ -34,12 +38,17 @@ func main() {
 		os.Exit(0)
 	}
 
+	peFile, err := pe.NewPEFile(filepath)
+	if err != nil {
+		fmt.Printf("Error creating PE file: %v\n", err)
+		os.Exit(1)
+	}
+
 	var offset int64
 	offset = 0
 	for {
-		f.Seek(offset, 0)
 		peSignature := make([]byte, 4)
-		_, err = f.Read(peSignature)
+		_, err = f.ReadAt(peSignature, offset)
 		if err != nil {
 			break
 		}
@@ -52,24 +61,13 @@ func main() {
 			}
 			defer peFile.Close()
 
-			// Determine the size of the PE header
-			peHeaderSize := int64(0)
-			f.Seek(offset+0x3C, 0)
-			f.Read(peSignature)
-			peHeaderSize = int64(peSignature[0]) | int64(peSignature[1])<<8 | int64(peSignature[2])<<16 | int64(peSignature[3])<<24
-
-			_, err = f.Seek(offset, 0)
+			peData, err := peFile.ReadAt(offset, int(peFile.Size()-offset))
 			if err != nil {
-				fmt.Printf("Error seeking in file: %v\n", err)
+				fmt.Printf("Error reading PE data: %v\n", err)
 				break
 			}
 
-			peData := make([]byte, peHeaderSize)
-			n, err := f.Read(peData)
-			if err != nil || n == 0 {
-				break
-			}
-			peFile.Write(peData[:n])
+			peFile.Write(peData)
 		}
 		offset++
 	}
