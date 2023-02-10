@@ -6,7 +6,7 @@ import (
 )
 
 const MB = 1024 * 1024
-const maxFileSize = 100 * MB
+const maxFileSize = 16 * 1024 * MB
 
 func main() {
 	if len(os.Args) != 2 {
@@ -21,18 +21,6 @@ func main() {
 		os.Exit(1)
 	}
 	defer f.Close()
-
-	fileInfo, err := f.Stat()
-	if err != nil {
-		fmt.Printf("Error getting file info: %v\n", err)
-		os.Exit(1)
-	}
-	fileSize := fileInfo.Size()
-
-	if fileSize > maxFileSize {
-		fmt.Printf("File size is larger than %d MB, skipping\n", maxFileSize/MB)
-		os.Exit(0)
-	}
 
 	var offset int64
 	offset = 0
@@ -54,7 +42,7 @@ func main() {
 			var peData []byte
 			var bytesRead int
 			var totalBytesRead int64
-			for totalBytesRead < fileSize {
+			for totalBytesRead < maxFileSize {
 				data := make([]byte, MB)
 				bytesRead, err = f.ReadAt(data, totalBytesRead)
 				if err != nil || bytesRead == 0 {
@@ -62,6 +50,11 @@ func main() {
 				}
 				totalBytesRead += int64(bytesRead)
 				peData = append(peData, data[:bytesRead]...)
+			}
+
+			if totalBytesRead >= maxFileSize {
+				fmt.Printf("Extracted file is larger than %d MB, skipping\n", maxFileSize/MB)
+				continue
 			}
 
 			_, err = outFile.Write(peData)
