@@ -3,10 +3,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"syscall"
-	"unsafe"
-
-	"github.com/Velocidex/go-pe"
 )
 
 const MB = 1024 * 1024
@@ -38,12 +34,6 @@ func main() {
 		os.Exit(0)
 	}
 
-	peFile, err := pe.NewPEFile(filepath)
-	if err != nil {
-		fmt.Printf("Error creating PE file: %v\n", err)
-		os.Exit(1)
-	}
-
 	var offset int64
 	offset = 0
 	for {
@@ -54,20 +44,31 @@ func main() {
 		}
 
 		if string(peSignature) == "MZ\x90\x00" {
-			peFile, err := os.Create(fmt.Sprintf("%08x.exe", offset))
+			outFile, err := os.Create(fmt.Sprintf("%08x.exe", offset))
 			if err != nil {
 				fmt.Printf("Error creating file: %v\n", err)
 				break
 			}
-			defer peFile.Close()
+			defer outFile.Close()
 
-			peData, err := peFile.ReadAt(offset, int(peFile.Size()-offset))
-			if err != nil {
-				fmt.Printf("Error reading PE data: %v\n", err)
-				break
+			var peData []byte
+			var bytesRead int
+			var totalBytesRead int64
+			for totalBytesRead < fileSize {
+				data := make([]byte, MB)
+				bytesRead, err = f.ReadAt(data, totalBytesRead)
+				if err != nil || bytesRead == 0 {
+					break
+				}
+				totalBytesRead += int64(bytesRead)
+				peData = append(peData, data[:bytesRead]...)
 			}
 
-			peFile.Write(peData)
+			_, err = outFile.Write(peData)
+			if err != nil {
+				fmt.Printf("Error writing PE data: %v\n", err)
+				break
+			}
 		}
 		offset++
 	}
